@@ -1,1 +1,56 @@
 README FILE
+
+Nightlife Navigator — iOS Prototype
+
+An iOS SwiftUI prototype that explores flows for venue discovery and group decision-making.
+This build includes four tabs:
+
+Hello (style + typography sampler)
+Styles (color & component style guide)
+Venues (list of sample venues with cards)
+Group Fit (“Join a Move”: members + sliders for cover/wait/vibe → Generate List)
+
+1) How to Build & Run
+  A) Clone & open
+  git clone <your-repo-url>
+  cd Nightlife\ Navigator
+  open "Nightlife Navigator.xcodeproj"
+  
+  B) Select scheme & destination
+  In Xcode, select the Nightlife Navigator scheme and choose an iOS Simulator (such as iPhone 15 Pro) or a physical device.
+
+  C) First run
+  Press Run. The app should install and launch to the Hello tab. 
+
+4) Reproducing Evidence Clippings / Demo Script
+These steps mirror what’s shown in our screenshots/clips:
+
+  A) Style & components (Hello / Styles)
+  Launch the app; Hello tab shows type & basic components.
+  Switch to Styles to view color tokens, spacing, and sample UI elements (dark theme, blue primary).
+  
+  B) Venues list
+  Tap Venues and observe the dark cards, typography, and pill/badge styling (as in evidence images).
+  
+  C) Group Fit (“Join a Move”)
+  Tap Group Fit. You’ll see a list of members, each with sliders:
+  
+    Max Cover: $0–$50
+    Max Wait: 0–120 minutes
+    Vibe: 0 (chill) → 100 (hype)
+  
+  Tap Add Member to add a name.
+  Tap Generate List to navigate to the placeholder Generated List screen showing group averages and the venue list.
+  This is where, in later iterations, we’ll rank/filter venues more thoroughly using these preferences.
+  
+5) Style Guide Notes (how the UI matches the spec)
+Theme: black app background (Color.black), dark cards (Color(white: 0.15)), blue primary CTAs.
+Cards: 12–16 pt padding, 12–16 pt corner radius, subtle section spacing.
+Type: .title for headers, .headline for card titles, .subheadline for metadata, monospaced digits for numeric labels.
+Controls: sliders for numeric inputs.
+
+6) Data & Persistence
+There is no network or database included for this prototype.
+Group members are held in memory (Published var members in GroupFitViewModel).
+
+Disclaimer: Code was written with the assistance of AI. 
