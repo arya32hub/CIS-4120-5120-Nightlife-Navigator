@@ -28,56 +28,19 @@ struct PrototypeSwitcherView: View {
     
     var body: some View {
         TabView(selection: $selectedPrototype) {
-            ContentView()
-                .tabItem {
-                    Label("Hello", systemImage: "hand.wave.fill")
-                }
-                .tag(0)
-            
-            HelloStylesView()
-                .tabItem {
-                    Label("Styles", systemImage: "paintpalette.fill")
-                }
-                .tag(1)
-            
             VenueListView()
                 .tabItem {
                     Label("Venues", systemImage: "music.note.house.fill")
                 }
-                .tag(2)
-        }
-        .accentColor(.blue) // Makes selected tab blue
-    }
-}
+                .tag(0)
 
-struct ContentView: View {
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            
-            VStack(spacing: 20) {
-                Text("Hello, World!")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-                    .padding()
-                
-                Text("Venue Finder App")
-                    .font(.title2)
-                    .foregroundColor(.gray)
-                
-                Text("✅ Swift/SwiftUI Prototype")
-                    .font(.subheadline)
-                    .foregroundColor(.green)
-                    .padding(.top, 20)
-                
-                Text("This demonstrates we can create and run iOS apps")
-                    .font(.caption)
-                    .foregroundColor(.gray)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 40)
+            NavigationStack {
+                GroupFitView()
             }
+            .tabItem { Label("Group Fit", systemImage: "person.3") }
+            .tag(1)
         }
+        .accentColor(.blue)
     }
 }
 
