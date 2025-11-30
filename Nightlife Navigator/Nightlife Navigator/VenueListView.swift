@@ -15,6 +15,11 @@ struct Venue: Identifiable {
     let coordinate: CLLocationCoordinate2D
 }
 
+// MARK: - Smart Reroute Manager
+class SmartRerouteManager: ObservableObject {
+    @AppStorage("disableSmartReroute") var disableSmartReroute: Bool = false
+}
+
 private enum VenueViewMode: String, CaseIterable {
     case list = "List"
     case map = "Map"
@@ -79,163 +84,157 @@ struct VenueListView: View {
         center: CLLocationCoordinate2D(latitude: 39.952583, longitude: -75.165222),
         span: MKCoordinateSpan(latitudeDelta: 0.08, longitudeDelta: 0.08)
     )
-    
+
     @State private var selectedVenue: Venue?
     @State private var showQRCode = false
     @State private var showCheckIn = false
     @State private var qrCodeImage: UIImage?
-    
+
     var body: some View {
-        ZStack {
-            // Dark background
-            Color.black.ignoresSafeArea()
-            
-            VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Text("Nearby Venues")
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                    
-                    Spacer()
-                    
-                    Text("\(venues.count) spots")
-                        .foregroundColor(.gray)
-                }
-                .padding()
-                
-                VenueViewToggle(selection: $viewMode)
-                    .padding(.horizontal)
-                    .padding(.bottom, 12)
-                    .onChange(of: viewMode) { newValue in
-                        if newValue == .list {
-                            mapSelectedVenue = nil
-                        } else {
-                            mapSelectedVenue = nil
-                            mapCameraPosition = .region(VenueListView.philadelphiaRegion)
-                            currentRegion = VenueListView.philadelphiaRegion
-                        }
+        NavigationStack {
+            ZStack {
+                // Dark background
+                Color.black.ignoresSafeArea()
+
+                VStack(spacing: 0) {
+                    // Header
+                    HStack {
+                        Text("Nearby Venues")
+                            .font(.title)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+
+                        Spacer()
+
+                        Text("\(venues.count) spots")
+                            .foregroundColor(.gray)
                     }
-                
-                Group {
-                    if viewMode == .list {
-                        ScrollView {
-                            VStack(spacing: 16) {
-                                ForEach(venues) { venue in
-                                    VenueCard(
-                                        venue: venue,
-                                        onImHere: {
-                                            checkIn(to: venue)
-                                        },
-                                        onQRButton: {
-                                            generateQRCode(for: venue)
+                    .padding()
+
+                    VenueViewToggle(selection: $viewMode)
+                        .padding(.horizontal)
+                        .padding(.bottom, 12)
+                        .onChange(of: viewMode) { newValue in
+                            if newValue == .list {
+                                mapSelectedVenue = nil
+                            } else {
+                                mapSelectedVenue = nil
+                                mapCameraPosition = .region(VenueListView.philadelphiaRegion)
+                                currentRegion = VenueListView.philadelphiaRegion
+                            }
+                        }
+
+                    Group {
+                        if viewMode == .list {
+                            ScrollView {
+                                VStack(spacing: 16) {
+                                    ForEach(venues) { venue in
+                                        VenueCard(
+                                            venue: venue,
+                                            allVenues: venues,
+                                            onQRButton: {
+                                                generateQRCode(for: venue)
+                                            }
+                                        )
+                                    }
+                                }
+                                .padding()
+                                .padding(.bottom, 140)
+                            }
+                        } else {
+                            ZStack {
+                                VenueMapView(
+                                    venues: venues,
+                                    cameraPosition: $mapCameraPosition,
+                                    onRegionChange: handleMapRegionChange,
+                                    onPinTap: { venue in
+                                        withAnimation(.spring()) {
+                                            mapSelectedVenue = venue
                                         }
-                                    )
+                                    },
+                                    onZoomIn: { zoom(by: 0.6) },
+                                    onZoomOut: { zoom(by: 1.4) }
+                                )
+                                .padding(.horizontal)
+                                .padding(.bottom, 140)
+
+                                if mapSelectedVenue != nil {
+                                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                        .fill(Color.black.opacity(0.001))
+                                        .padding(.horizontal)
+                                        .padding(.bottom, 24)
+                                        .onTapGesture {
+                                            withAnimation(.spring()) {
+                                                mapSelectedVenue = nil
+                                            }
+                                        }
                                 }
                             }
-                            .padding()
-                            .padding(.bottom, 140)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
-                    } else {
-                        ZStack {
-                            VenueMapView(
-                                venues: venues,
-                                cameraPosition: $mapCameraPosition,
-                                onRegionChange: handleMapRegionChange,
-                                onPinTap: { venue in
-                                    withAnimation(.spring()) {
-                                        mapSelectedVenue = venue
-                                    }
-                                },
-                                onZoomIn: { zoom(by: 0.6) },
-                                onZoomOut: { zoom(by: 1.4) }
-                            )
-                            .padding(.horizontal)
-                            .padding(.bottom, 140)
-                            
-                            if mapSelectedVenue != nil {
-                                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                    .fill(Color.black.opacity(0.001))
-                                    .padding(.horizontal)
-                                    .padding(.bottom, 24)
-                                    .onTapGesture {
-                                        withAnimation(.spring()) {
-                                            mapSelectedVenue = nil
-                                        }
-                                    }
-                            }
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
+
                 }
-                
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            
-            if viewMode == .map, let selected = mapSelectedVenue {
-                VStack {
-                    Spacer()
-                    VenueCardWithHandle(
-                        venue: selected,
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+
+                if viewMode == .map, let selected = mapSelectedVenue {
+                    VStack {
+                        Spacer()
+                        VenueCardWithHandle(
+                            venue: selected,
+                            allVenues: venues,
+                            onDismiss: {
+                                withAnimation(.spring()) {
+                                    mapSelectedVenue = nil
+                                }
+                            },
+                            onQRButton: { generateQRCode(for: selected) }
+                        )
+                        .padding(.horizontal)
+                        .padding(.bottom, 40)
+                    }
+                    .transition(.move(edge: .bottom))
+                    .zIndex(1)
+                }
+
+                // QR Code Overlay
+                if showQRCode, let qrImage = qrCodeImage, let venue = selectedVenue {
+                    QRCodeOverlay(
+                        venueName: venue.name,
+                        qrImage: qrImage,
                         onDismiss: {
-                            withAnimation(.spring()) {
-                                mapSelectedVenue = nil
-                            }
-                        },
-                        onImHere: { checkIn(to: selected) },
-                        onQRButton: { generateQRCode(for: selected) }
+                            showQRCode = false
+                            selectedVenue = nil
+                        }
                     )
-                    .padding(.horizontal)
-                    .padding(.bottom, 40)
                 }
-                .transition(.move(edge: .bottom))
-                .zIndex(1)
-            }
-            
-            // QR Code Overlay
-            if showQRCode, let qrImage = qrCodeImage, let venue = selectedVenue {
-                QRCodeOverlay(
-                    venueName: venue.name,
-                    qrImage: qrImage,
-                    onDismiss: {
-                        showQRCode = false
-                        selectedVenue = nil
-                    }
-                )
-            }
-            
-            // Check-in Confirmation Overlay
-            if showCheckIn, let venue = selectedVenue {
-                CheckInConfirmationOverlay(
-                    venueName: venue.name,
-                    onDismiss: {
-                        showCheckIn = false
-                        selectedVenue = nil
-                    }
-                )
+
+                // Check-in Confirmation Overlay
+                if showCheckIn, let venue = selectedVenue {
+                    CheckInConfirmationOverlay(
+                        venueName: venue.name,
+                        onDismiss: {
+                            showCheckIn = false
+                            selectedVenue = nil
+                        }
+                    )
+                }
             }
         }
     }
-    
-    // Check in to venue
-    func checkIn(to venue: Venue) {
-        selectedVenue = venue
-        showCheckIn = true
-    }
-    
+
     // Generate QR Code
     func generateQRCode(for venue: Venue) {
         let context = CIContext()
         let filter = CIFilter.qrCodeGenerator()
         let data = Data("venue:\(venue.name)_checkin:\(Date().timeIntervalSince1970)".utf8)
         filter.setValue(data, forKey: "inputMessage")
-        
+
         if let outputImage = filter.outputImage {
             // Scale up the QR code
             let transform = CGAffineTransform(scaleX: 10, y: 10)
             let scaledImage = outputImage.transformed(by: transform)
-            
+
             if let cgImage = context.createCGImage(scaledImage, from: scaledImage.extent) {
                 qrCodeImage = UIImage(cgImage: cgImage)
                 selectedVenue = venue
@@ -285,9 +284,9 @@ struct VenueListView: View {
 
 struct VenueCard: View {
     let venue: Venue
-    let onImHere: () -> Void
+    let allVenues: [Venue]
     let onQRButton: () -> Void
-    
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
             // Main card
@@ -298,7 +297,7 @@ struct VenueCard: View {
                         .font(.title3)
                         .fontWeight(.semibold)
                         .foregroundColor(.white)
-                    
+
                     if let fit = venue.groupFit {
                             Text("Group Fit \(fit)%")
                                 .font(.caption).fontWeight(.semibold)
@@ -308,14 +307,14 @@ struct VenueCard: View {
                                 .background(Color(white: 0.12))
                                 .cornerRadius(10)
                         }
-                    
+
                     Spacer()
-                    
+
                     // Sound level indicator
                     Image(systemName: venue.soundLevel == "loud" ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
                         .foregroundColor(venue.soundLevel == "loud" ? .orange : .green)
                 }
-                
+
                 // Distance
                 HStack {
                     Image(systemName: "location.fill")
@@ -324,7 +323,7 @@ struct VenueCard: View {
                         .foregroundColor(.gray)
                 }
                 .font(.subheadline)
-                
+
                 // Status and wait time
                 HStack(spacing: 12) {
                     // Status badge
@@ -340,7 +339,7 @@ struct VenueCard: View {
                     .background(statusColor(for: venue.status).opacity(0.2))
                     .foregroundColor(statusColor(for: venue.status))
                     .cornerRadius(16)
-                    
+
                     // Wait time
                     HStack {
                         Image(systemName: "clock")
@@ -349,7 +348,7 @@ struct VenueCard: View {
                     .font(.subheadline)
                     .foregroundColor(.gray)
                 }
-                
+
                 // Music genre
                 HStack {
                     Image(systemName: "music.note")
@@ -357,24 +356,27 @@ struct VenueCard: View {
                 }
                 .font(.subheadline)
                 .foregroundColor(.gray)
-                
-                // "I'm Here!" Button
-                Button(action: onImHere) {
-                    Text("I'm Here!")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Color.blue)
-                        .cornerRadius(8)
+
+                // "View Venue" Button - navigates to detail view
+                NavigationLink(destination: VenueDetailView(venue: venue, allVenues: allVenues)) {
+                    HStack {
+                        Image(systemName: "eye.fill")
+                        Text("View Venue")
+                    }
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.blue)
+                    .cornerRadius(8)
                 }
                 .padding(.top, 8)
             }
             .padding()
             .background(Color(white: 0.15))
             .cornerRadius(16)
-            
+
             // QR Code button in top-right corner
             Button(action: onQRButton) {
                 Image(systemName: "qrcode")
@@ -387,7 +389,7 @@ struct VenueCard: View {
             .offset(x: -12, y: 12)
         }
     }
-    
+
     private func groupFitColor(_ v: Int) -> Color {
         switch v {
         case 0..<40:  return .red
@@ -405,7 +407,7 @@ struct VenueMapView: View {
     var onPinTap: (Venue) -> Void
     var onZoomIn: () -> Void
     var onZoomOut: () -> Void
-    
+
     var body: some View {
         Map(position: $cameraPosition, interactionModes: [.all]) {
             ForEach(venues) { venue in
@@ -442,7 +444,7 @@ struct VenueMapView: View {
             onRegionChange(context.region)
         }
     }
-    
+
     private func zoomButton(icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
@@ -457,7 +459,7 @@ struct VenueMapView: View {
 
 private struct VenuePinView: View {
     let venue: Venue
-    
+
     var body: some View {
         VStack(spacing: 4) {
             Text(venue.name)
@@ -471,7 +473,7 @@ private struct VenuePinView: View {
                         .fill(statusColor(for: venue.status))
                         .shadow(color: .black.opacity(0.35), radius: 4, x: 0, y: 3)
                 )
-            
+
             Image(systemName: "mappin.circle.fill")
                 .font(.title2)
                 .foregroundColor(statusColor(for: venue.status))
@@ -495,7 +497,7 @@ private func statusColor(for status: String) -> Color {
 
 private struct VenueViewToggle: View {
     @Binding var selection: VenueViewMode
-    
+
     var body: some View {
         HStack(spacing: 4) {
             ForEach(VenueViewMode.allCases, id: \.self) { mode in
@@ -528,15 +530,15 @@ private struct VenueViewToggle: View {
 
 private struct VenueCardWithHandle: View {
     let venue: Venue
+    let allVenues: [Venue]
     let onDismiss: () -> Void
-    let onImHere: () -> Void
     let onQRButton: () -> Void
     @GestureState private var dragOffset: CGFloat = 0
 
     var body: some View {
         VenueCard(
             venue: venue,
-            onImHere: onImHere,
+            allVenues: allVenues,
             onQRButton: onQRButton
         )
         .overlay(alignment: .top) {
@@ -567,7 +569,7 @@ struct QRCodeOverlay: View {
     let venueName: String
     let qrImage: UIImage
     let onDismiss: () -> Void
-    
+
     var body: some View {
         ZStack {
             // Semi-transparent background
@@ -576,18 +578,18 @@ struct QRCodeOverlay: View {
                 .onTapGesture {
                     onDismiss()
                 }
-            
+
             // QR Code card
             VStack(spacing: 20) {
                 Text("Check-in QR Code")
                     .font(.title2)
                     .fontWeight(.bold)
                     .foregroundColor(.white)
-                
+
                 Text(venueName)
                     .font(.headline)
                     .foregroundColor(.gray)
-                
+
                 Image(uiImage: qrImage)
                     .interpolation(.none)
                     .resizable()
@@ -596,11 +598,11 @@ struct QRCodeOverlay: View {
                     .background(Color.white)
                     .cornerRadius(12)
                     .padding()
-                
+
                 Text("Show this code at the venue")
                     .font(.subheadline)
                     .foregroundColor(.gray)
-                
+
                 Button(action: onDismiss) {
                     Text("Done")
                         .font(.headline)
@@ -623,7 +625,7 @@ struct QRCodeOverlay: View {
 struct CheckInConfirmationOverlay: View {
     let venueName: String
     let onDismiss: () -> Void
-    
+
     var body: some View {
         ZStack {
             // Semi-transparent background
@@ -632,7 +634,7 @@ struct CheckInConfirmationOverlay: View {
                 .onTapGesture {
                     onDismiss()
                 }
-            
+
             // Confirmation card
             VStack(spacing: 25) {
                 // Success checkmark
@@ -640,28 +642,28 @@ struct CheckInConfirmationOverlay: View {
                     Circle()
                         .fill(Color.green)
                         .frame(width: 80, height: 80)
-                    
+
                     Image(systemName: "checkmark")
                         .font(.system(size: 40, weight: .bold))
                         .foregroundColor(.white)
                 }
                 .padding(.top, 10)
-                
+
                 Text("Checked In!")
                     .font(.title)
                     .fontWeight(.bold)
                     .foregroundColor(.white)
-                
+
                 Text(venueName)
                     .font(.title3)
                     .foregroundColor(.gray)
-                
+
                 Text("You're all set! Enjoy your night.")
                     .font(.subheadline)
                     .foregroundColor(.gray)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 20)
-                
+
                 // Info text
                 VStack(spacing: 8) {
                     HStack(spacing: 12) {
@@ -671,7 +673,7 @@ struct CheckInConfirmationOverlay: View {
                             .font(.subheadline)
                             .foregroundColor(.gray)
                     }
-                    
+
                     HStack(spacing: 12) {
                         Image(systemName: "clock.fill")
                             .foregroundColor(.blue)
@@ -681,7 +683,7 @@ struct CheckInConfirmationOverlay: View {
                     }
                 }
                 .padding(.vertical, 10)
-                
+
                 Button(action: onDismiss) {
                     Text("Done")
                         .font(.headline)
@@ -700,7 +702,7 @@ struct CheckInConfirmationOverlay: View {
             .padding(40)
         }
     }
-    
+
     func formattedTime() -> String {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
@@ -708,6 +710,526 @@ struct CheckInConfirmationOverlay: View {
     }
 }
 
+// MARK: - Venue Detail View
+struct VenueDetailView: View {
+    let venue: Venue
+    let allVenues: [Venue]
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var rerouteManager = SmartRerouteManager()
+
+    @State private var showSmartReroute = false
+    @State private var suggestedVenue: Venue?
+    @State private var originalWaitTime: String = ""
+    @State private var newWaitTime: String = "25 min"
+    @State private var navigateToSuggested = false
+
+    @State private var showCheckIn = false
+    @State private var showQRCode = false
+    @State private var qrCodeImage: UIImage?
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            ScrollView {
+                VStack(spacing: 0) {
+                    // Hero section with venue name
+                    VStack(spacing: 16) {
+                        // Status indicator
+                        HStack {
+                            Circle()
+                                .fill(statusColor(for: venue.status))
+                                .frame(width: 12, height: 12)
+                            Text(venue.status)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            Spacer()
+                            Image(systemName: venue.soundLevel == "loud" ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
+                                .foregroundColor(venue.soundLevel == "loud" ? .orange : .green)
+                        }
+                        .foregroundColor(statusColor(for: venue.status))
+
+                        Text(venue.name)
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        // Distance
+                        HStack {
+                            Image(systemName: "location.fill")
+                            Text(venue.distance + " away")
+                        }
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding()
+                    .background(
+                        LinearGradient(
+                            colors: [statusColor(for: venue.status).opacity(0.3), Color.clear],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+
+                    // Characteristics Grid
+                    VStack(spacing: 16) {
+                        Text("Venue Details")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        // Long press anywhere on this grid to trigger Smart Reroute demo
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                            CharacteristicCard(
+                                icon: "clock.fill",
+                                title: "Wait Time",
+                                value: venue.waitTime,
+                                color: .blue
+                            )
+
+                            CharacteristicCard(
+                                icon: "music.note",
+                                title: "Music",
+                                value: venue.musicGenre,
+                                color: .purple
+                            )
+
+                            CharacteristicCard(
+                                icon: "speaker.wave.2.fill",
+                                title: "Sound Level",
+                                value: venue.soundLevel.capitalized,
+                                color: venue.soundLevel == "loud" ? .orange : .green
+                            )
+
+                            CharacteristicCard(
+                                icon: "person.3.fill",
+                                title: "Crowd",
+                                value: venue.status,
+                                color: statusColor(for: venue.status)
+                            )
+                        }
+                        .contentShape(Rectangle())
+                        .onLongPressGesture(minimumDuration: 0.5) {
+                            triggerSmartRerouteDemo()
+                        }
+
+                        if let fit = venue.groupFit {
+                            HStack {
+                                Image(systemName: "heart.fill")
+                                    .foregroundColor(groupFitColor(fit))
+                                Text("Group Fit: \(fit)%")
+                                    .fontWeight(.semibold)
+                                Spacer()
+                                Text(groupFitLabel(fit))
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
+                            .padding()
+                            .background(Color(white: 0.12))
+                            .cornerRadius(12)
+                            .foregroundColor(groupFitColor(fit))
+                        }
+                    }
+                    .padding()
+
+                    Spacer(minLength: 120)
+                }
+            }
+
+            // Bottom buttons
+            VStack {
+                Spacer()
+
+                VStack(spacing: 12) {
+                    // I'm Here button
+                    Button(action: {
+                        showCheckIn = true
+                    }) {
+                        HStack {
+                            Image(systemName: "mappin.and.ellipse")
+                            Text("I'm Here!")
+                        }
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(Color.blue)
+                        .cornerRadius(14)
+                    }
+
+                    // QR Code button
+                    Button(action: {
+                        generateQRCode()
+                    }) {
+                        HStack {
+                            Image(systemName: "qrcode")
+                            Text("Show QR Code")
+                        }
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color(white: 0.2))
+                        .cornerRadius(14)
+                    }
+                }
+                .padding()
+                .background(
+                    Color.black.opacity(0.95)
+                        .ignoresSafeArea(edges: .bottom)
+                )
+            }
+
+            // Smart Reroute Overlay
+            if showSmartReroute, let suggested = suggestedVenue {
+                SmartRerouteOverlay(
+                    currentVenue: venue,
+                    suggestedVenue: suggested,
+                    originalWaitTime: originalWaitTime,
+                    newWaitTime: newWaitTime,
+                    onSwitch: {
+                        showSmartReroute = false
+                        // Navigate to the suggested venue
+                        navigateToSuggested = true
+                    },
+                    onStay: {
+                        showSmartReroute = false
+                    },
+                    onDisable: {
+                        rerouteManager.disableSmartReroute = true
+                        showSmartReroute = false
+                    }
+                )
+            }
+
+            // Hidden navigation link to suggested venue
+            if let suggested = suggestedVenue {
+                NavigationLink(
+                    destination: VenueDetailView(venue: suggested, allVenues: allVenues),
+                    isActive: $navigateToSuggested
+                ) {
+                    EmptyView()
+                }
+                .hidden()
+            }
+
+            // Check-in overlay
+            if showCheckIn {
+                CheckInConfirmationOverlay(
+                    venueName: venue.name,
+                    onDismiss: { showCheckIn = false }
+                )
+            }
+
+            // QR Code overlay
+            if showQRCode, let qrImage = qrCodeImage {
+                QRCodeOverlay(
+                    venueName: venue.name,
+                    qrImage: qrImage,
+                    onDismiss: { showQRCode = false }
+                )
+            }
+        }
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func triggerSmartRerouteDemo() {
+        // Don't show if user disabled it
+        guard !rerouteManager.disableSmartReroute else { return }
+
+        // Don't show if already showing
+        guard !showSmartReroute else { return }
+
+        // Find a similar venue to suggest
+        if let similar = findSimilarVenue() {
+            suggestedVenue = similar
+            originalWaitTime = venue.waitTime
+
+            // Trigger immediately
+            withAnimation(.spring()) {
+                showSmartReroute = true
+            }
+        }
+    }
+
+    private func findSimilarVenue() -> Venue? {
+        // Find a venue with similar vibe but shorter wait
+        let currentGenre = venue.musicGenre.lowercased()
+
+        return allVenues.first { other in
+            guard other.id != venue.id else { return false }
+
+            // Check for similar music/vibe
+            let otherGenre = other.musicGenre.lowercased()
+            let similarMusic = currentGenre.contains("jazz") && otherGenre.contains("jazz") ||
+                               currentGenre.contains("edm") && (otherGenre.contains("house") || otherGenre.contains("techno")) ||
+                               currentGenre.contains("house") && (otherGenre.contains("edm") || otherGenre.contains("techno")) ||
+                               other.soundLevel == venue.soundLevel
+
+            // Prefer venues with shorter wait
+            let shorterWait = other.status != "Busy"
+
+            return similarMusic && shorterWait
+        }
+    }
+
+    private func generateQRCode() {
+        let context = CIContext()
+        let filter = CIFilter.qrCodeGenerator()
+        let data = Data("venue:\(venue.name)_checkin:\(Date().timeIntervalSince1970)".utf8)
+        filter.setValue(data, forKey: "inputMessage")
+
+        if let outputImage = filter.outputImage {
+            let transform = CGAffineTransform(scaleX: 10, y: 10)
+            let scaledImage = outputImage.transformed(by: transform)
+
+            if let cgImage = context.createCGImage(scaledImage, from: scaledImage.extent) {
+                qrCodeImage = UIImage(cgImage: cgImage)
+                showQRCode = true
+            }
+        }
+    }
+
+    private func groupFitColor(_ v: Int) -> Color {
+        switch v {
+        case 0..<40: return .red
+        case 40..<70: return .yellow
+        default: return .green
+        }
+    }
+
+    private func groupFitLabel(_ v: Int) -> String {
+        switch v {
+        case 0..<40: return "Not ideal"
+        case 40..<70: return "Decent match"
+        default: return "Great match!"
+        }
+    }
+}
+
+// MARK: - Characteristic Card
+private struct CharacteristicCard: View {
+    let icon: String
+    let title: String
+    let value: String
+    let color: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: icon)
+                    .foregroundColor(color)
+                Spacer()
+            }
+
+            Text(title.uppercased())
+                .font(.caption2)
+                .foregroundColor(.gray)
+
+            Text(value)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundColor(.white)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(white: 0.12))
+        .cornerRadius(12)
+    }
+}
+
+// MARK: - Smart Reroute Overlay
+struct SmartRerouteOverlay: View {
+    let currentVenue: Venue
+    let suggestedVenue: Venue
+    let originalWaitTime: String
+    let newWaitTime: String
+    let onSwitch: () -> Void
+    let onStay: () -> Void
+    let onDisable: () -> Void
+
+    @State private var appearAnimation = false
+
+    var body: some View {
+        ZStack {
+            // Background
+            Color.black.opacity(0.85)
+                .ignoresSafeArea()
+
+            // Alert Card
+            VStack(spacing: 20) {
+                // Warning icon with pulse animation
+                ZStack {
+                    Circle()
+                        .fill(Color.orange.opacity(0.2))
+                        .frame(width: 100, height: 100)
+                        .scaleEffect(appearAnimation ? 1.2 : 1.0)
+                        .opacity(appearAnimation ? 0.5 : 1.0)
+
+                    Circle()
+                        .fill(Color.orange.opacity(0.3))
+                        .frame(width: 80, height: 80)
+
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 36))
+                        .foregroundColor(.orange)
+                }
+                .padding(.top, 10)
+
+                // Title
+                Text("Wait Time Alert!")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+
+                // Message
+                VStack(spacing: 8) {
+                    Text("Oops! Looks like the line at")
+                        .foregroundColor(.gray)
+                    Text(currentVenue.name)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                    HStack(spacing: 4) {
+                        Text("jumped from")
+                            .foregroundColor(.gray)
+                        Text(originalWaitTime)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.yellow)
+                        Text("to")
+                            .foregroundColor(.gray)
+                        Text(newWaitTime)
+                            .fontWeight(.bold)
+                            .foregroundColor(.red)
+                        Text("now.")
+                            .foregroundColor(.gray)
+                    }
+                }
+                .font(.subheadline)
+                .multilineTextAlignment(.center)
+
+                // Suggested venue card
+                VStack(spacing: 12) {
+                    Text("Here's a similar vibe nearby:")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(suggestedVenue.name)
+                                .font(.headline)
+                                .foregroundColor(.white)
+
+                            HStack(spacing: 12) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "clock")
+                                    Text(suggestedVenue.waitTime)
+                                }
+                                .foregroundColor(.green)
+
+                                HStack(spacing: 4) {
+                                    Image(systemName: "music.note")
+                                    Text(suggestedVenue.musicGenre)
+                                }
+                                .foregroundColor(.gray)
+                            }
+                            .font(.caption)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "arrow.right.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(.blue)
+                    }
+                    .padding()
+                    .background(Color(white: 0.2))
+                    .cornerRadius(12)
+                }
+                .padding(.horizontal)
+
+                // Buttons
+                VStack(spacing: 10) {
+                    // Yes, switch
+                    Button(action: onSwitch) {
+                        HStack {
+                            Image(systemName: "arrow.triangle.swap")
+                            Text("Yes, I'd like to switch")
+                        }
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color.blue)
+                        .cornerRadius(12)
+                    }
+
+                    // No, stay
+                    Button(action: onStay) {
+                        Text("No, I'll stay here")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Color(white: 0.25))
+                            .cornerRadius(12)
+                    }
+
+                    // Don't show again
+                    Button(action: onDisable) {
+                        Text("Don't show Smart Reroute again")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                            .padding(.top, 4)
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.bottom, 10)
+            }
+            .padding(24)
+            .background(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(Color(white: 0.12))
+            )
+            .padding(24)
+            .scaleEffect(appearAnimation ? 1.0 : 0.9)
+            .opacity(appearAnimation ? 1.0 : 0)
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                appearAnimation = true
+            }
+        }
+    }
+}
+
 #Preview {
     VenueListView()
+}
+
+#Preview("Venue Detail") {
+    NavigationStack {
+        VenueDetailView(
+            venue: VenueListView.defaultVenues[1],
+            allVenues: VenueListView.defaultVenues
+        )
+    }
+}
+
+#Preview("Smart Reroute") {
+    SmartRerouteOverlay(
+        currentVenue: VenueListView.defaultVenues[1],
+        suggestedVenue: VenueListView.defaultVenues[0],
+        originalWaitTime: "10-15 min",
+        newWaitTime: "25 min",
+        onSwitch: {},
+        onStay: {},
+        onDisable: {}
+    )
 }
