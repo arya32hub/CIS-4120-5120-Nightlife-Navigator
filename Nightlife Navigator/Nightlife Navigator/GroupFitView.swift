@@ -46,12 +46,27 @@ struct GroupFitView: View {
                 ScrollView {
                     LazyVStack(spacing: 16) {
                         ForEach($groups) { $group in
-                            NavigationLink {
-                                GroupDetailView(group: $group)
-                            } label: {
-                                GroupCard(group: group)
+                            HStack(spacing: 12) {
+                                NavigationLink {
+                                    GroupDetailView(group: $group)
+                                } label: {
+                                    GroupCard(group: group)
+                                }
+                                .buttonStyle(.plain)
+                                
+                                Button(action: {
+                                    if let index = groups.firstIndex(where: { $0.id == group.id }) {
+                                        groups.remove(at: index)
+                                    }
+                                }) {
+                                    Image(systemName: "trash")
+                                        .font(.system(size: 18))
+                                        .foregroundColor(.red)
+                                        .frame(width: 44, height: 44)
+                                        .background(Color(white: 0.15))
+                                        .cornerRadius(12)
+                                }
                             }
-                            .buttonStyle(.plain)
                         }
 
                         Button {
@@ -118,6 +133,7 @@ private struct GroupDetailView: View {
     @Binding var group: NightOutGroup
     @State private var showingAddMember = false
     @State private var newMemberName = ""
+    var onDeleteMember: ((UUID) -> Void)?
 
     var body: some View {
         ZStack {
@@ -129,7 +145,14 @@ private struct GroupDetailView: View {
 
                     VStack(spacing: 12) {
                         ForEach($group.members) { $member in
-                            FriendVibeRow(member: $member)
+                            FriendVibeRow(
+                                member: $member,
+                                onDelete: {
+                                    if let index = group.members.firstIndex(where: { $0.id == member.id }) {
+                                        group.members.remove(at: index)
+                                    }
+                                }
+                            )
                         }
 
                         Button {
@@ -382,6 +405,7 @@ private struct GroupIntroCard: View {
 
 private struct FriendVibeRow: View {
     @Binding var member: GroupMember
+    var onDelete: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -389,6 +413,19 @@ private struct FriendVibeRow: View {
                 Text(member.name)
                     .font(.headline)
                     .foregroundColor(.white)
+                
+                Spacer()
+                
+                Button(action: {
+                    onDelete?()
+                }) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 16))
+                        .foregroundColor(.red)
+                        .padding(8)
+                        .background(Color(white: 0.2))
+                        .cornerRadius(8)
+                }
             }
 
             PreferenceSlider(

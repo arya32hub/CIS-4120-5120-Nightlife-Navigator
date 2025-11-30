@@ -15,6 +15,17 @@ struct Venue: Identifiable {
     let coordinate: CLLocationCoordinate2D
 }
 
+// MARK: - Venue Rating Model
+struct VenueRating: Identifiable {
+    let id = UUID()
+    var venueId: UUID
+    let talkability: Double  // 0-100
+    let cover: Double        // $0-100
+    let waitTime: Double     // 0-120 min
+    let musicVibe: Double    // 0-100
+    let timestamp: Date
+}
+
 // MARK: - Smart Reroute Manager
 class SmartRerouteManager: ObservableObject {
     @AppStorage("disableSmartReroute") var disableSmartReroute: Bool = false
@@ -44,6 +55,96 @@ struct VenueListView: View {
         self._lastRequestedRegion = State(initialValue: region)
         self._currentRegion = State(initialValue: region)
         self._mapSelectedVenue = State(initialValue: nil)
+        
+        // Initialize with sample ratings for testing
+        var sampleRatings: [VenueRating] = []
+        if let firstVenue = initialVenues.first {
+            // Add 3 ratings for the first venue (The Velvet Room)
+            sampleRatings.append(VenueRating(
+                venueId: firstVenue.id,
+                talkability: 75,
+                cover: 15,
+                waitTime: 10,
+                musicVibe: 60,
+                timestamp: Date().addingTimeInterval(-3600)
+            ))
+            sampleRatings.append(VenueRating(
+                venueId: firstVenue.id,
+                talkability: 80,
+                cover: 20,
+                waitTime: 5,
+                musicVibe: 55,
+                timestamp: Date().addingTimeInterval(-7200)
+            ))
+            sampleRatings.append(VenueRating(
+                venueId: firstVenue.id,
+                talkability: 70,
+                cover: 10,
+                waitTime: 8,
+                musicVibe: 65,
+                timestamp: Date().addingTimeInterval(-10800)
+            ))
+        }
+        
+        if initialVenues.count > 1 {
+            let secondVenue = initialVenues[1]
+            // Add 2 ratings for Neon Pulse
+            sampleRatings.append(VenueRating(
+                venueId: secondVenue.id,
+                talkability: 25,
+                cover: 25,
+                waitTime: 15,
+                musicVibe: 90,
+                timestamp: Date().addingTimeInterval(-1800)
+            ))
+            sampleRatings.append(VenueRating(
+                venueId: secondVenue.id,
+                talkability: 30,
+                cover: 30,
+                waitTime: 12,
+                musicVibe: 85,
+                timestamp: Date().addingTimeInterval(-5400)
+            ))
+        }
+        
+        if initialVenues.count > 3 {
+            let fourthVenue = initialVenues[3]
+            // Add 4 ratings for Paul's Baby Grand
+            sampleRatings.append(VenueRating(
+                venueId: fourthVenue.id,
+                talkability: 85,
+                cover: 5,
+                waitTime: 3,
+                musicVibe: 40,
+                timestamp: Date().addingTimeInterval(-900)
+            ))
+            sampleRatings.append(VenueRating(
+                venueId: fourthVenue.id,
+                talkability: 90,
+                cover: 10,
+                waitTime: 5,
+                musicVibe: 35,
+                timestamp: Date().addingTimeInterval(-3000)
+            ))
+            sampleRatings.append(VenueRating(
+                venueId: fourthVenue.id,
+                talkability: 88,
+                cover: 0,
+                waitTime: 2,
+                musicVibe: 45,
+                timestamp: Date().addingTimeInterval(-6000)
+            ))
+            sampleRatings.append(VenueRating(
+                venueId: fourthVenue.id,
+                talkability: 92,
+                cover: 8,
+                waitTime: 4,
+                musicVibe: 38,
+                timestamp: Date().addingTimeInterval(-9000)
+            ))
+        }
+        
+        self._allRatings = State(initialValue: sampleRatings)
     }
 
     // Your original sample data, now as a static so Group Fit can reuse it
@@ -89,6 +190,7 @@ struct VenueListView: View {
     @State private var showQRCode = false
     @State private var showCheckIn = false
     @State private var qrCodeImage: UIImage?
+    @State private var allRatings: [VenueRating] = []
 
     var body: some View {
         NavigationStack {
@@ -132,6 +234,10 @@ struct VenueListView: View {
                                         VenueCard(
                                             venue: venue,
                                             allVenues: venues,
+                                            ratings: allRatings.filter { $0.venueId == venue.id },
+                                            onRatingSubmit: { rating in
+                                                allRatings.append(rating)
+                                            },
                                             onQRButton: {
                                                 generateQRCode(for: venue)
                                             }
@@ -183,6 +289,10 @@ struct VenueListView: View {
                         VenueCardWithHandle(
                             venue: selected,
                             allVenues: venues,
+                            ratings: allRatings.filter { $0.venueId == selected.id },
+                            onRatingSubmit: { rating in
+                                allRatings.append(rating)
+                            },
                             onDismiss: {
                                 withAnimation(.spring()) {
                                     mapSelectedVenue = nil
@@ -285,6 +395,8 @@ struct VenueListView: View {
 struct VenueCard: View {
     let venue: Venue
     let allVenues: [Venue]
+    let ratings: [VenueRating]
+    let onRatingSubmit: (VenueRating) -> Void
     let onQRButton: () -> Void
 
     var body: some View {
@@ -358,7 +470,12 @@ struct VenueCard: View {
                 .foregroundColor(.gray)
 
                 // "View Venue" Button - navigates to detail view
-                NavigationLink(destination: VenueDetailView(venue: venue, allVenues: allVenues)) {
+                NavigationLink(destination: VenueDetailView(
+                    venue: venue,
+                    allVenues: allVenues,
+                    ratings: ratings,
+                    onRatingSubmit: onRatingSubmit
+                )) {
                     HStack {
                         Image(systemName: "eye.fill")
                         Text("View Venue")
@@ -531,6 +648,8 @@ private struct VenueViewToggle: View {
 private struct VenueCardWithHandle: View {
     let venue: Venue
     let allVenues: [Venue]
+    let ratings: [VenueRating]
+    let onRatingSubmit: (VenueRating) -> Void
     let onDismiss: () -> Void
     let onQRButton: () -> Void
     @GestureState private var dragOffset: CGFloat = 0
@@ -539,6 +658,8 @@ private struct VenueCardWithHandle: View {
         VenueCard(
             venue: venue,
             allVenues: allVenues,
+            ratings: ratings,
+            onRatingSubmit: onRatingSubmit,
             onQRButton: onQRButton
         )
         .overlay(alignment: .top) {
@@ -714,6 +835,9 @@ struct CheckInConfirmationOverlay: View {
 struct VenueDetailView: View {
     let venue: Venue
     let allVenues: [Venue]
+    let ratings: [VenueRating]
+    let onRatingSubmit: ((VenueRating) -> Void)?
+    
     @Environment(\.dismiss) private var dismiss
     @StateObject private var rerouteManager = SmartRerouteManager()
 
@@ -726,6 +850,7 @@ struct VenueDetailView: View {
     @State private var showCheckIn = false
     @State private var showQRCode = false
     @State private var qrCodeImage: UIImage?
+    @State private var showSurvey = false
 
     var body: some View {
         ZStack {
@@ -813,6 +938,65 @@ struct VenueDetailView: View {
                         .contentShape(Rectangle())
                         .onLongPressGesture(minimumDuration: 0.5) {
                             triggerSmartRerouteDemo()
+                        }
+                        
+                        // User Ratings Section
+                        if !ratings.isEmpty {
+                            Divider()
+                                .background(Color.gray.opacity(0.3))
+                                .padding(.vertical, 8)
+                            
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack {
+                                    Text("User Ratings")
+                                        .font(.headline)
+                                        .foregroundColor(.white)
+                                    
+                                    Spacer()
+                                    
+                                    Text("Based on \(ratings.count) rating\(ratings.count == 1 ? "" : "s")")
+                                        .font(.caption)
+                                        .foregroundColor(.gray)
+                                }
+                                
+                                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                                    if let avgTalk = averageRating(\.talkability) {
+                                        CharacteristicCard(
+                                            icon: "bubble.left.and.bubble.right",
+                                            title: "Talkability",
+                                            value: vibeLabel(avgTalk),
+                                            color: .blue
+                                        )
+                                    }
+                                    
+                                    if let avgVibe = averageRating(\.musicVibe) {
+                                        CharacteristicCard(
+                                            icon: "music.note",
+                                            title: "Vibe",
+                                            value: vibeLabel(avgVibe),
+                                            color: .orange
+                                        )
+                                    }
+                                    
+                                    if let avgCover = averageRating(\.cover) {
+                                        CharacteristicCard(
+                                            icon: "dollarsign.circle",
+                                            title: "Avg Cover",
+                                            value: "$\(Int(avgCover))",
+                                            color: .purple
+                                        )
+                                    }
+                                    
+                                    if let avgWait = averageRating(\.waitTime) {
+                                        CharacteristicCard(
+                                            icon: "clock",
+                                            title: "Avg Wait",
+                                            value: "\(Int(avgWait)) min",
+                                            color: .green
+                                        )
+                                    }
+                                }
+                            }
                         }
 
                         if let fit = venue.groupFit {
@@ -909,7 +1093,12 @@ struct VenueDetailView: View {
             // Hidden navigation link to suggested venue
             if let suggested = suggestedVenue {
                 NavigationLink(
-                    destination: VenueDetailView(venue: suggested, allVenues: allVenues),
+                    destination: VenueDetailView(
+                        venue: suggested,
+                        allVenues: allVenues,
+                        ratings: ratings.filter { $0.venueId == suggested.id },
+                        onRatingSubmit: onRatingSubmit
+                    ),
                     isActive: $navigateToSuggested
                 ) {
                     EmptyView()
@@ -921,7 +1110,10 @@ struct VenueDetailView: View {
             if showCheckIn {
                 CheckInConfirmationOverlay(
                     venueName: venue.name,
-                    onDismiss: { showCheckIn = false }
+                    onDismiss: {
+                        showCheckIn = false
+                        showSurvey = true
+                    }
                 )
             }
 
@@ -931,6 +1123,22 @@ struct VenueDetailView: View {
                     venueName: venue.name,
                     qrImage: qrImage,
                     onDismiss: { showQRCode = false }
+                )
+            }
+            
+            // Post Check-in Survey
+            if showSurvey {
+                PostCheckInSurveyView(
+                    venueName: venue.name,
+                    onSubmit: { rating in
+                        var newRating = rating
+                        newRating.venueId = venue.id
+                        onRatingSubmit?(newRating)
+                        showSurvey = false
+                    },
+                    onSkip: {
+                        showSurvey = false
+                    }
                 )
             }
         }
@@ -1007,6 +1215,20 @@ struct VenueDetailView: View {
         case 0..<40: return "Not ideal"
         case 40..<70: return "Decent match"
         default: return "Great match!"
+        }
+    }
+    
+    private func averageRating(_ keyPath: KeyPath<VenueRating, Double>) -> Double? {
+        guard !ratings.isEmpty else { return nil }
+        let sum = ratings.map { $0[keyPath: keyPath] }.reduce(0, +)
+        return sum / Double(ratings.count)
+    }
+    
+    private func vibeLabel(_ value: Double) -> String {
+        switch value {
+        case 0..<30: return "Chill"
+        case 30..<70: return "Balanced"
+        default: return "Hype"
         }
     }
 }
@@ -1209,6 +1431,176 @@ struct SmartRerouteOverlay: View {
     }
 }
 
+// MARK: - Post Check-In Survey
+struct PostCheckInSurveyView: View {
+    let venueName: String
+    let onSubmit: (VenueRating) -> Void
+    let onSkip: () -> Void
+    
+    @State private var talkability: Double = 50
+    @State private var cover: Double = 10
+    @State private var waitTime: Double = 15
+    @State private var musicVibe: Double = 50
+    
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.95)
+                .ignoresSafeArea()
+            
+            ScrollView {
+                VStack(spacing: 24) {
+                    VStack(spacing: 12) {
+                        Text("Rate Your Experience")
+                            .font(.title)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                        
+                        Text(venueName)
+                            .font(.title3)
+                            .foregroundColor(.gray)
+                        
+                        Text("Help others know what to expect!")
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
+                    }
+                    .padding(.top, 40)
+                    
+                    VStack(spacing: 20) {
+                        SliderCard(
+                            title: "Talkability",
+                            subtitle: "How easy was it to have a conversation?",
+                            value: $talkability,
+                            range: 0...100,
+                            step: 1,
+                            tint: .blue,
+                            valueLabel: talkabilityLabel
+                        )
+                        
+                        SliderCard(
+                            title: "Cover Charge",
+                            subtitle: "What was the cover charge?",
+                            value: $cover,
+                            range: 0...100,
+                            step: 5,
+                            tint: .purple,
+                            valueLabel: "$\(Int(cover))"
+                        )
+                        
+                        SliderCard(
+                            title: "Wait Time",
+                            subtitle: "How long did you wait to get in?",
+                            value: $waitTime,
+                            range: 0...120,
+                            step: 5,
+                            tint: .green,
+                            valueLabel: "\(Int(waitTime)) min"
+                        )
+                        
+                        SliderCard(
+                            title: "Music & Vibe",
+                            subtitle: "What was the overall vibe?",
+                            value: $musicVibe,
+                            range: 0...100,
+                            step: 1,
+                            tint: .orange,
+                            valueLabel: vibeLabel
+                        )
+                    }
+                    .padding(.horizontal)
+                    
+                    VStack(spacing: 12) {
+                        Button {
+                            let rating = VenueRating(
+                                venueId: UUID(),
+                                talkability: talkability,
+                                cover: cover,
+                                waitTime: waitTime,
+                                musicVibe: musicVibe,
+                                timestamp: Date()
+                            )
+                            onSubmit(rating)
+                        } label: {
+                            Text("Submit Rating")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.blue)
+                                .cornerRadius(14)
+                        }
+                        
+                        Button {
+                            onSkip()
+                        } label: {
+                            Text("Skip for Now")
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                        }
+                    }
+                    .padding(.horizontal, 40)
+                    .padding(.bottom, 40)
+                }
+            }
+        }
+    }
+    
+    private var talkabilityLabel: String {
+        switch talkability {
+        case 0..<30: return "Hard to Talk"
+        case 30..<70: return "Moderate"
+        default: return "Easy to Talk"
+        }
+    }
+    
+    private var vibeLabel: String {
+        switch musicVibe {
+        case 0..<30: return "Chill"
+        case 30..<70: return "Balanced"
+        default: return "Hype"
+        }
+    }
+}
+
+// MARK: - Slider Card Component
+private struct SliderCard: View {
+    let title: String
+    let subtitle: String
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    let step: Double
+    let tint: Color
+    let valueLabel: String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundColor(.white)
+                
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+            
+            HStack {
+                Slider(value: $value, in: range, step: step)
+                    .tint(tint)
+                
+                Text(valueLabel)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                    .frame(minWidth: 80, alignment: .trailing)
+            }
+        }
+        .padding()
+        .background(Color(white: 0.15))
+        .cornerRadius(16)
+    }
+}
+
 #Preview {
     VenueListView()
 }
@@ -1217,7 +1609,9 @@ struct SmartRerouteOverlay: View {
     NavigationStack {
         VenueDetailView(
             venue: VenueListView.defaultVenues[1],
-            allVenues: VenueListView.defaultVenues
+            allVenues: VenueListView.defaultVenues,
+            ratings: [],
+            onRatingSubmit: nil
         )
     }
 }
