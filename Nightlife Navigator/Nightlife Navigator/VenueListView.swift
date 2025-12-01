@@ -55,7 +55,7 @@ struct VenueListView: View {
         self._lastRequestedRegion = State(initialValue: region)
         self._currentRegion = State(initialValue: region)
         self._mapSelectedVenue = State(initialValue: nil)
-        
+
         // Initialize with sample ratings for testing
         var sampleRatings: [VenueRating] = []
         if let firstVenue = initialVenues.first {
@@ -85,7 +85,7 @@ struct VenueListView: View {
                 timestamp: Date().addingTimeInterval(-10800)
             ))
         }
-        
+
         if initialVenues.count > 1 {
             let secondVenue = initialVenues[1]
             // Add 2 ratings for Neon Pulse
@@ -106,7 +106,7 @@ struct VenueListView: View {
                 timestamp: Date().addingTimeInterval(-5400)
             ))
         }
-        
+
         if initialVenues.count > 3 {
             let fourthVenue = initialVenues[3]
             // Add 4 ratings for Paul's Baby Grand
@@ -143,7 +143,7 @@ struct VenueListView: View {
                 timestamp: Date().addingTimeInterval(-9000)
             ))
         }
-        
+
         self._allRatings = State(initialValue: sampleRatings)
     }
 
@@ -199,87 +199,88 @@ struct VenueListView: View {
                 Color.black.ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    // Header
-                    HStack {
-                        Text("Nearby Venues")
-                            .font(.title)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
+                    // Fixed Header Section - always at top
+                    VStack(spacing: 0) {
+                        // Header
+                        HStack {
+                            Text("Nearby Venues")
+                                .font(.title)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
 
-                        Spacer()
+                            Spacer()
 
-                        Text("\(venues.count) spots")
-                            .foregroundColor(.gray)
-                    }
-                    .padding()
-
-                    VenueViewToggle(selection: $viewMode)
-                        .padding(.horizontal)
-                        .padding(.bottom, 12)
-                        .onChange(of: viewMode) { newValue in
-                            if newValue == .list {
-                                mapSelectedVenue = nil
-                            } else {
-                                mapSelectedVenue = nil
-                                mapCameraPosition = .region(VenueListView.philadelphiaRegion)
-                                currentRegion = VenueListView.philadelphiaRegion
-                            }
+                            Text("\(venues.count) spots")
+                                .foregroundColor(.gray)
                         }
+                        .padding()
+                        .frame(maxWidth: .infinity)
 
-                    Group {
-                        if viewMode == .list {
-                            ScrollView {
-                                VStack(spacing: 16) {
-                                    ForEach(venues) { venue in
-                                        VenueCard(
-                                            venue: venue,
-                                            allVenues: venues,
-                                            ratings: allRatings.filter { $0.venueId == venue.id },
-                                            onRatingSubmit: { rating in
-                                                allRatings.append(rating)
-                                            },
-                                            onQRButton: {
-                                                generateQRCode(for: venue)
-                                            }
-                                        )
+                        VenueViewToggle(selection: $viewMode)
+                            .padding(.horizontal)
+                            .padding(.bottom, 12)
+                            .onChange(of: viewMode) { newValue in
+                                if newValue == .list {
+                                    mapSelectedVenue = nil
+                                } else {
+                                    mapSelectedVenue = nil
+                                    mapCameraPosition = .region(VenueListView.philadelphiaRegion)
+                                    currentRegion = VenueListView.philadelphiaRegion
+                                }
+                            }
+                    }
+                    .background(Color.black)
+
+                    // Content Area - fills remaining space
+                    if viewMode == .list {
+                        ScrollView {
+                            VStack(spacing: 16) {
+                                ForEach(venues) { venue in
+                                    VenueCard(
+                                        venue: venue,
+                                        allVenues: venues,
+                                        ratings: allRatings.filter { $0.venueId == venue.id },
+                                        onRatingSubmit: { rating in
+                                            allRatings.append(rating)
+                                        },
+                                        onQRButton: {
+                                            generateQRCode(for: venue)
+                                        }
+                                    )
+                                }
+                            }
+                            .padding()
+                            .padding(.bottom, 140)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        ZStack {
+                            VenueMapView(
+                                venues: venues,
+                                cameraPosition: $mapCameraPosition,
+                                onRegionChange: handleMapRegionChange,
+                                onPinTap: { venue in
+                                    withAnimation(.spring()) {
+                                        mapSelectedVenue = venue
                                     }
-                                }
-                                .padding()
-                                .padding(.bottom, 140)
-                            }
-                        } else {
-                            ZStack {
-                                VenueMapView(
-                                    venues: venues,
-                                    cameraPosition: $mapCameraPosition,
-                                    onRegionChange: handleMapRegionChange,
-                                    onPinTap: { venue in
+                                },
+                                onZoomIn: { zoom(by: 0.6) },
+                                onZoomOut: { zoom(by: 1.4) }
+                            )
+
+                            if mapSelectedVenue != nil {
+                                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                    .fill(Color.black.opacity(0.001))
+                                    .padding(.bottom, 24)
+                                    .onTapGesture {
                                         withAnimation(.spring()) {
-                                            mapSelectedVenue = venue
+                                            mapSelectedVenue = nil
                                         }
-                                    },
-                                    onZoomIn: { zoom(by: 0.6) },
-                                    onZoomOut: { zoom(by: 1.4) }
-                                )
-                                .padding(.horizontal)
-                                .padding(.bottom, 140)
-
-                                if mapSelectedVenue != nil {
-                                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                        .fill(Color.black.opacity(0.001))
-                                        .padding(.horizontal)
-                                        .padding(.bottom, 24)
-                                        .onTapGesture {
-                                            withAnimation(.spring()) {
-                                                mapSelectedVenue = nil
-                                            }
-                                        }
-                                }
+                                    }
                             }
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
@@ -330,6 +331,7 @@ struct VenueListView: View {
                     )
                 }
             }
+            .toolbar(.hidden, for: .navigationBar)
         }
     }
 
@@ -537,7 +539,8 @@ struct VenueMapView: View {
                 }
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea(edges: [.horizontal, .bottom])
         .overlay(alignment: .topLeading) {
             Text("Drag the map to load venues")
                 .font(.caption)
@@ -837,7 +840,7 @@ struct VenueDetailView: View {
     let allVenues: [Venue]
     let ratings: [VenueRating]
     let onRatingSubmit: ((VenueRating) -> Void)?
-    
+
     @Environment(\.dismiss) private var dismiss
     @StateObject private var rerouteManager = SmartRerouteManager()
 
@@ -939,26 +942,26 @@ struct VenueDetailView: View {
                         .onLongPressGesture(minimumDuration: 0.5) {
                             triggerSmartRerouteDemo()
                         }
-                        
+
                         // User Ratings Section
                         if !ratings.isEmpty {
                             Divider()
                                 .background(Color.gray.opacity(0.3))
                                 .padding(.vertical, 8)
-                            
+
                             VStack(alignment: .leading, spacing: 12) {
                                 HStack {
                                     Text("User Ratings")
                                         .font(.headline)
                                         .foregroundColor(.white)
-                                    
+
                                     Spacer()
-                                    
+
                                     Text("Based on \(ratings.count) rating\(ratings.count == 1 ? "" : "s")")
                                         .font(.caption)
                                         .foregroundColor(.gray)
                                 }
-                                
+
                                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                                     if let avgTalk = averageRating(\.talkability) {
                                         CharacteristicCard(
@@ -968,7 +971,7 @@ struct VenueDetailView: View {
                                             color: .blue
                                         )
                                     }
-                                    
+
                                     if let avgVibe = averageRating(\.musicVibe) {
                                         CharacteristicCard(
                                             icon: "music.note",
@@ -977,7 +980,7 @@ struct VenueDetailView: View {
                                             color: .orange
                                         )
                                     }
-                                    
+
                                     if let avgCover = averageRating(\.cover) {
                                         CharacteristicCard(
                                             icon: "dollarsign.circle",
@@ -986,7 +989,7 @@ struct VenueDetailView: View {
                                             color: .purple
                                         )
                                     }
-                                    
+
                                     if let avgWait = averageRating(\.waitTime) {
                                         CharacteristicCard(
                                             icon: "clock",
@@ -1125,7 +1128,7 @@ struct VenueDetailView: View {
                     onDismiss: { showQRCode = false }
                 )
             }
-            
+
             // Post Check-in Survey
             if showSurvey {
                 PostCheckInSurveyView(
@@ -1217,13 +1220,13 @@ struct VenueDetailView: View {
         default: return "Great match!"
         }
     }
-    
+
     private func averageRating(_ keyPath: KeyPath<VenueRating, Double>) -> Double? {
         guard !ratings.isEmpty else { return nil }
         let sum = ratings.map { $0[keyPath: keyPath] }.reduce(0, +)
         return sum / Double(ratings.count)
     }
-    
+
     private func vibeLabel(_ value: Double) -> String {
         switch value {
         case 0..<30: return "Chill"
@@ -1436,17 +1439,17 @@ struct PostCheckInSurveyView: View {
     let venueName: String
     let onSubmit: (VenueRating) -> Void
     let onSkip: () -> Void
-    
+
     @State private var talkability: Double = 50
     @State private var cover: Double = 10
     @State private var waitTime: Double = 15
     @State private var musicVibe: Double = 50
-    
+
     var body: some View {
         ZStack {
             Color.black.opacity(0.95)
                 .ignoresSafeArea()
-            
+
             ScrollView {
                 VStack(spacing: 24) {
                     VStack(spacing: 12) {
@@ -1454,17 +1457,17 @@ struct PostCheckInSurveyView: View {
                             .font(.title)
                             .fontWeight(.bold)
                             .foregroundColor(.white)
-                        
+
                         Text(venueName)
                             .font(.title3)
                             .foregroundColor(.gray)
-                        
+
                         Text("Help others know what to expect!")
                             .font(.subheadline)
                             .foregroundColor(.gray)
                     }
                     .padding(.top, 40)
-                    
+
                     VStack(spacing: 20) {
                         SliderCard(
                             title: "Talkability",
@@ -1475,7 +1478,7 @@ struct PostCheckInSurveyView: View {
                             tint: .blue,
                             valueLabel: talkabilityLabel
                         )
-                        
+
                         SliderCard(
                             title: "Cover Charge",
                             subtitle: "What was the cover charge?",
@@ -1485,7 +1488,7 @@ struct PostCheckInSurveyView: View {
                             tint: .purple,
                             valueLabel: "$\(Int(cover))"
                         )
-                        
+
                         SliderCard(
                             title: "Wait Time",
                             subtitle: "How long did you wait to get in?",
@@ -1495,7 +1498,7 @@ struct PostCheckInSurveyView: View {
                             tint: .green,
                             valueLabel: "\(Int(waitTime)) min"
                         )
-                        
+
                         SliderCard(
                             title: "Music & Vibe",
                             subtitle: "What was the overall vibe?",
@@ -1507,7 +1510,7 @@ struct PostCheckInSurveyView: View {
                         )
                     }
                     .padding(.horizontal)
-                    
+
                     VStack(spacing: 12) {
                         Button {
                             let rating = VenueRating(
@@ -1529,7 +1532,7 @@ struct PostCheckInSurveyView: View {
                                 .background(Color.blue)
                                 .cornerRadius(14)
                         }
-                        
+
                         Button {
                             onSkip()
                         } label: {
@@ -1544,7 +1547,7 @@ struct PostCheckInSurveyView: View {
             }
         }
     }
-    
+
     private var talkabilityLabel: String {
         switch talkability {
         case 0..<30: return "Hard to Talk"
@@ -1552,7 +1555,7 @@ struct PostCheckInSurveyView: View {
         default: return "Easy to Talk"
         }
     }
-    
+
     private var vibeLabel: String {
         switch musicVibe {
         case 0..<30: return "Chill"
@@ -1571,23 +1574,23 @@ private struct SliderCard: View {
     let step: Double
     let tint: Color
     let valueLabel: String
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.headline)
                     .foregroundColor(.white)
-                
+
                 Text(subtitle)
                     .font(.caption)
                     .foregroundColor(.gray)
             }
-            
+
             HStack {
                 Slider(value: $value, in: range, step: step)
                     .tint(tint)
-                
+
                 Text(valueLabel)
                     .font(.subheadline)
                     .fontWeight(.semibold)
